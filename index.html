@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Training Progress Tracker</title>
+<style>
+:root{--bg:#f5f7fa;--card:#fff;--text:#1d2433;--muted:#667085;--border:#e4e7ec;--brand:#1f5eff;--ok:#12b76a;--bad:#f04438;--radius:10px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f1420;--card:#171e2e;--text:#e6e9f0;--muted:#9aa4b8;--border:#2a3347}}
+:root[data-theme="dark"]{--bg:#0f1420;--card:#171e2e;--text:#e6e9f0;--muted:#9aa4b8;--border:#2a3347}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5}
+header h1{font-size:17px;margin:0}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+nav button{background:none;border:1px solid transparent;color:var(--muted)}
+nav button.active{color:var(--brand);border-color:var(--border);background:var(--bg);font-weight:600}
+main{padding:20px;max-width:1280px;margin:0 auto}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:14px}
+.left{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+h2{font-size:18px;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.card h3{margin-top:0;font-size:15px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.kpi{margin:0}
+.kpi .v{font-size:24px;font-weight:700}
+.kpi .l{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.wrap{overflow-x:auto}
+button,.btn{font:inherit;padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+button.danger{color:var(--bad)}
+button.small{padding:3px 8px;font-size:12px}
+input,select,textarea{font:inherit;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);min-width:0}
+input[type=search]{min-width:240px}
+.bar{height:8px;background:var(--border);border-radius:99px;overflow:hidden;min-width:90px;margin-bottom:4px}
+.bar>span{display:block;height:100%;background:var(--brand)}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+.s-not{background:#eef0f4;color:#475467}
+.s-prog{background:#e0eaff;color:#1849a9}
+.s-done{background:#dcfae6;color:#067647}
+.s-retake{background:#fef0c7;color:#93370d}
+.s-drop{background:#fee4e2;color:#b42318}
+.muted{color:var(--muted)}
+.mods{display:flex;flex-wrap:wrap;gap:4px}
+.mod{font-size:12px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer}
+.mod.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.empty{text-align:center;color:var(--muted);padding:28px}
+dialog{border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);width:min(580px,92vw);padding:0}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+.modal-body{padding:18px}
+.modal-body label{display:block;margin-bottom:12px}
+.modal-body label>span{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.modal-body input:not([type=checkbox]),.modal-body select,.modal-body textarea{width:100%}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.checks{max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px}
+.checks label{display:flex;gap:8px;align-items:center;margin:6px 0}
+.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:8px 20px 24px}
+@media (max-width:640px){.grid2{grid-template-columns:1fr}main{padding:14px}input[type=search]{min-width:0;width:100%}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Training Progress Tracker</h1>
+  <nav>
+    <button data-view="dashboard">Dashboard</button>
+    <button data-view="trainings">Trainings</button>
+    <button data-view="learners">Learners</button>
+    <button data-view="progress">Progress</button>
+    <button data-view="data">Data</button>
+  </nav>
+</header>
+<main><div id="view"></div></main>
+<footer>Data is stored in this browser only. Export a JSON backup from Data to keep a copy.</footer>
+<dialog id="modal"></dialog>
+
+<script>
+const KEY = 'training-progress-tracker-v1';
+const STATUS = {NOT:'Not started', PROG:'In progress', DONE:'Completed', RETAKE:'Needs retake', DROP:'Dropped'};
+const STATUS_CLS = {[STATUS.NOT]:'s-not',[STATUS.PROG]:'s-prog',[STATUS.DONE]:'s-done',[STATUS.RETAKE]:'s-retake',[STATUS.DROP]:'s-drop'};
+const AT_RISK_DAYS = 14;
+
+let view = 'dashboard';
+let filters = {pSearch:'', pTraining:'', pStatus:'', lSearch:''};
+
+/* ---------- storage ---------- */
+const blank = () => ({trainings:[], learners:[], enrollments:[]});
+function normalize(d){
+  return {
+    trainings:(d.trainings||[]).map(t=>({name:'',category:'',trainer:'',startDate:'',endDate:'',passMark:null,modules:[],...t})),
+    learners:(d.learners||[]).map(l=>({name:'',email:'',team:'',location:'',...l})),
+    enrollments:(d.enrollments||[]).map(e=>({score:null,dropped:false,completedModules:[],lastActivity:'',enrolledOn:'',...e}))
+  };
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    return raw ? normalize(JSON.parse(raw)) : blank();
+  }catch(e){
+    console.warn('Could not read saved data', e);
+    return blank();
+  }
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(db)); }
+  catch(e){ alert('Could not save data in this browser: ' + e.message); }
+}
+let db = load();
+
+/* ---------- helpers ---------- */
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2,10));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const localISO = (d = new Date()) => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+const today = () => localISO();
+const daysSince = iso => iso ? Math.floor((new Date(today()) - new Date(iso)) / 86400000) : Infinity;
+const trainingById = id => db.trainings.find(t => t.id === id);
+const learnerById = id => db.learners.find(l => l.id === id);
+const badge = s => `<span class="badge ${STATUS_CLS[s] || 's-not'}">${esc(s)}</span>`;
+const bar = p => `<div class="bar"><span style="width:${p}%"></span></div>`;
+const kpi = (v, l) => `<div class="card kpi"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`;
+
+function enrollProgress(e){
+  const t = trainingById(e.trainingId);
+  if(!t || !t.modules.length) return 0;
+  const done = e.completedModules.filter(m => t.modules.includes(m)).length;
+  return Math.round(done / t.modules.length * 100);
+}
+function enrollStatus(e){
+  if(e.dropped) return STATUS.DROP;
+  const t = trainingById(e.trainingId);
+  const p = enrollProgress(e);
+  const hasPass = t && t.passMark != null;
+  if(p === 0 && e.score == null) return STATUS.NOT;
+  if(p < 100) return STATUS.PROG;
+  if(hasPass && e.score == null) return STATUS.PROG;          // modules done, awaiting assessment
+  if(hasPass && Number(e.score) < t.passMark) return STATUS.RETAKE;
+  return STATUS.DONE;
+}
+function atRisk(e){
+  if(e.dropped) return false;
+  const t = trainingById(e.trainingId);
+  const st = enrollStatus(e);
+  if(st === STATUS.DONE) return false;
+  const overdue = t && t.endDate && t.endDate < today();
+  const stalled = st === STATUS.PROG && daysSince(e.lastActivity) > AT_RISK_DAYS;
+  return Boolean(overdue || stalled);
+}
+function trainingStats(t){
+  const es = db.enrollments.filter(e => e.trainingId === t.id && !e.dropped);
+  const n = es.length;
+  const done = es.filter(e => enrollStatus(e) === STATUS.DONE).length;
+  const prog = n ? Math.round(es.reduce((a,e) => a + enrollProgress(e), 0) / n) : 0;
+  const scored = es.filter(e => e.score != null);
+  const avg = scored.length ? Math.round(scored.reduce((a,e) => a + Number(e.score), 0) / scored.length) : null;
+  return {n, done, prog, avg, rate: n ? Math.round(done / n * 100) : 0, atRisk: es.filter(atRisk).length};
+}
+
+/* ---------- views ---------- */
+function renderDashboard(){
+  const active = db.enrollments.filter(e => !e.dropped);
+  const done = active.filter(e => enrollStatus(e) === STATUS.DONE).length;
+  const scored = active.filter(e => e.score != null);
+  const avg = scored.length ? Math.round(scored.reduce((a,e) => a + Number(e.score), 0) / scored.length) : null;
+  const risk = active.filter(atRisk).length;
+  const rate = active.length ? Math.round(done / active.length * 100) : 0;
+  const learnersEnrolled = new Set(active.map(e => e.learnerId)).size;
+  const rows = db.trainings.map(t => ({t, s: trainingStats(t)})).sort((a,b) => b.s.n - a.s.n);
+
+  return `
+  <h2>Dashboard</h2>
+  <div class="kpis">
+    ${kpi(db.trainings.length, 'Trainings')}
+    ${kpi(db.learners.length, 'Learners')}
+    ${kpi(learnersEnrolled, 'Learners enrolled')}
+    ${kpi(rate + '%', 'Completion rate')}
+    ${kpi(avg == null ? '–' : avg + '%', 'Avg assessment score')}
+    ${kpi(risk, 'At risk')}
+  </div>
+  <div class="card"><div class="wrap">
+  ${rows.length ? `<table>
+    <thead><tr><th>Training</th><th>Enrolled</th><th>Completed</th><th style="width:26%">Avg progress</th><th>Avg score</th><th>Completion</th><th>At risk</th></tr></thead>
+    <tbody>${rows.map(({t,s}) => `<tr>
+      <td><strong>${esc(t.name)}</strong><div class="muted">${esc(t.category)}${t.trainer ? ' · ' + esc(t.trainer) : ''}</div></td>
+      <td>${s.n}</td>
+      <td>${s.done}</td>
+      <td>${bar(s.prog)}<span class="muted">${s.prog}%</span></td>
+      <td>${s.avg == null ? '–' : s.avg + '%'}</td>
+      <td>${s.rate}%</td>
+      <td>${s.atRisk ? `<span class="badge s-drop">${s.atRisk}</span>` : '0'}</td>
+    </tr>`).join('')}</tbody>
+  </table>` : `<div class="empty">No trainings yet. Add one under Trainings, or load sample data under Data.</div>`}
+  </div></div>
+  <p class="muted">At risk = not completed and either past the training end date, or in progress with no activity for ${AT_RISK_DAYS}+ days. Dropped enrolments are excluded from these figures.</p>`;
+}
+
+function renderTrainings(){
+  return `
+  <div class="toolbar"><h2 style="margin:0">Trainings</h2><button class="primary" data-act="new-training">+ New training</button></div>
+  <div class="card"><div class="wrap">
+  ${db.trainings.length ? `<table>
+    <thead><tr><th>Training</th><th>Dates</th><th>Modules</th><th>Pass mark</th><th>Enrolled</th><th>Completion</th><th></th></tr></thead>
+    <tbody>${db.trainings.map(t => {
+      const s = trainingStats(t);
+      return `<tr>
+        <td><strong>${esc(t.name)}</strong><div class="muted">${esc(t.category)}${t.trainer ? ' · Trainer: ' + esc(t.trainer) : ''}</div></td>
+        <td style="white-space:nowrap">${esc(t.startDate || '–')} → ${esc(t.endDate || '–')}</td>
+        <td>${t.modules.length}</td>
+        <td>${t.passMark == null ? '–' : t.passMark + '%'}</td>
+        <td>${s.n}</td>
+        <td style="min-width:120px">${bar(s.rate)}<span class="muted">${s.rate}% completed</span></td>
+        <td style="white-space:nowrap">
+          <button class="small" data-act="enroll" data-id="${t.id}">Enrol learners</button>
+          <button class="small" data-act="edit-training" data-id="${t.id}">Edit</button>
+          <button class="small danger" data-act="del-training" data-id="${t.id}">Delete</button>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>` : `<div class="empty">No trainings yet. Click “+ New training” to start.</div>`}
+  </div></div>`;
+}
+
+function renderLearners(){
+  const q = filters.lSearch.trim().toLowerCase();
+  const list = db.learners
+    .filter(l => !q || [l.name, l.email, l.team, l.location].join(' ').toLowerCase().includes(q))
+    .sort((a,b) => a.name.localeCompare(b.name));
+  return `
+  <div class="toolbar">
+    <div class="left"><h2 style="margin:0">Learners</h2><input type="search" id="lSearch" placeholder="Search name, email, team…" value="${esc(filters.lSearch)}"></div>
+    <button class="primary" data-act="new-learner">+ Add learner</button>
+  </div>
+  <div class="card"><div class="wrap">
+  ${list.length ? `<table>
+    <thead><tr><th>Name</th><th>Email</th><th>Team / client</th><th>Location</th><th>Trainings</th><th>Completed</th><th></th></tr></thead>
+    <tbody>${list.map(l => {
+      const es = db.enrollments.filter(e => e.learnerId === l.id && !e.dropped);
+      const d = es.filter(e => enrollStatus(e) === STATUS.DONE).length;
+      return `<tr>
+        <td><strong>${esc(l.name)}</strong></td>
+        <td>${esc(l.email)}</td>
+        <td>${esc(l.team)}</td>
+        <td>${esc(l.location)}</td>
+        <td>${es.length}</td>
+        <td>${d}</td>
+        <td style="white-space:nowrap">
+          <button class="small" data-act="edit-learner" data-id="${l.id}">Edit</button>
+          <button class="small danger" data-act="del-learner" data-id="${l.id}">Delete</button>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>` : `<div class="empty">${db.learners.length ? 'No learners match the search.' : 'No learners yet. Add one, or import a CSV under Data.'}</div>`}
+  </div></div>`;
+}
+
+function renderProgress(){
+  const q = filters.pSearch.trim().toLowerCase();
+  const list = db.enrollments.filter(e => {
+    const l = learnerById(e.learnerId), t = trainingById(e.trainingId);
+    if(!l || !t) return false;
+    if(filters.pTraining && t.id !== filters.pTraining) return false;
+    if(filters.pStatus && enrollStatus(e) !== filters.pStatus) return false;
+    if(q && !(l.name + ' ' + t.name + ' ' + l.team).toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a,b) => learnerById(a.learnerId).name.localeCompare(learnerById(b.learnerId).name));
+
+  const trainingOpts = db.trainings.map(t => `<option value="${t.id}" ${t.id === filters.pTraining ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+  const statusOpts = Object.values(STATUS).map(s => `<option value="${esc(s)}" ${s === filters.pStatus ? 'selected' : ''}>${esc(s)}</option>`).join('');
+
+  return `
+  <div class="toolbar"><h2 style="margin:0">Learner progress</h2><span class="muted">${list.length} of ${db.enrollments.length} enrolments shown</span></div>
+  <div class="toolbar">
+    <div class="left">
+      <input type="search" id="pSearch" placeholder="Search learner, training or team…" value="${esc(filters.pSearch)}">
+      <select id="pTraining"><option value="">All trainings</option>${trainingOpts}</select>
+      <select id="pStatus"><option value="">All statuses</option>${statusOpts}</select>
+    </div>
+  </div>
+  <div class="card"><div class="wrap">
+  ${list.length ? `<table>
+    <thead><tr><th>Learner</th><th>Training</th><th style="min-width:240px">Modules (click to mark done)</th><th>Progress</th><th>Assessment %</th><th>Status</th><th>Last activity</th><th></th></tr></thead>
+    <tbody>${list.map(e => {
+      const l = learnerById(e.learnerId), t = trainingById(e.trainingId);
+      const p = enrollProgress(e), st = enrollStatus(e);
+      const mods = t.modules.length
+        ? t.modules.map((m,i) => `<button class="mod ${e.completedModules.includes(m) ? 'on' : ''}" data-act="toggle-mod" data-id="${e.id}" data-mod="${i}" ${e.dropped ? 'disabled' : ''}>${esc(m)}</button>`).join('')
+        : '<span class="muted">No modules defined</span>';
+      return `<tr>
+        <td><strong>${esc(l.name)}</strong><div class="muted">${esc(l.team)}</div></td>
+        <td>${esc(t.name)}</td>
+        <td><div class="mods">${mods}</div></td>
+        <td style="min-width:110px">${bar(p)}<span class="muted">${p}%</span></td>
+        <td><input type="number" min="0" max="100" step="1" style="width:76px" value="${e.score ?? ''}" data-act="score" data-id="${e.id}"></td>
+        <td>${badge(st)}</td>
+        <td style="white-space:nowrap">${e.lastActivity ? esc(e.lastActivity) : '<span class="muted">–</span>'}${atRisk(e) ? ' <span class="badge s-drop">At risk</span>' : ''}</td>
+        <td style="white-space:nowrap">
+          ${e.dropped
+            ? `<button class="small" data-act="reinstate" data-id="${e.id}">Reinstate</button>`
+            : `<button class="small" data-act="drop" data-id="${e.id}">Mark dropped</button>`}
+          <button class="small danger" data-act="unenroll" data-id="${e.id}">Remove</button>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>` : `<div class="empty">${db.enrollments.length ? 'No enrolments match these filters.' : 'No enrolments yet. Go to Trainings and choose “Enrol learners”.'}</div>`}
+  </div></div>
+  <p class="muted">Assessment % is optional. If a training has a pass mark, a completed training with a lower score is marked “Needs retake”.</p>`;
+}
+
+function renderData(){
+  return `
+  <h2>Data</h2>
+  <div class="card"><h3>Progress report</h3>
+    <p class="muted">One row per learner per training, with status, progress, score and last activity. Opens in Excel or Power BI.</p>
+    <button data-act="export-csv">Export progress CSV</button>
+  </div>
+  <div class="card"><h3>Import learners from CSV</h3>
+    <p class="muted">Header row required: <code>name,email,team,location</code> (only <code>name</code> is required). Learners with an email already in the tracker are skipped.</p>
+    <input type="file" accept=".csv,text/csv" id="csvFile">
+  </div>
+  <div class="card"><h3>Backup and restore</h3>
+    <p class="muted">Export a JSON backup regularly. Importing a backup replaces all current data.</p>
+    <button data-act="export-json">Export JSON backup</button>
+    <label class="btn" style="cursor:pointer">Import JSON backup<input type="file" accept=".json,application/json" id="jsonFile" hidden></label>
+  </div>
+  <div class="card"><h3>Sample data and reset</h3>
+    <p class="muted">Sample data uses fictitious learners and trainings so you can try the app.</p>
+    <button data-act="load-sample">Load sample data</button>
+    <button class="danger" data-act="clear-all">Clear all data</button>
+  </div>`;
+}
+
+const VIEWS = {dashboard:renderDashboard, trainings:renderTrainings, learners:renderLearners, progress:renderProgress, data:renderData};
+
+function render(){
+  const a = document.activeElement;
+  const focusId = a && a.type === 'search' ? a.id : null;
+  const caret = focusId ? a.selectionStart : null;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.getElementById('view').innerHTML = VIEWS[view]();
+  if(focusId){
+    const el = document.getElementById(focusId);
+    if(el){ el.focus(); el.setSelectionRange(caret, caret); }
+  }
+}
+
+/* ---------- modal forms ---------- */
+const modal = document.getElementById('modal');
+function openModal(title, body, onSubmit){
+  modal.innerHTML = `<form class="modal-body">
+    <h3 style="margin-top:0">${esc(title)}</h3>${body}
+    <div class="actions"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Save</button></div>
+  </form>`;
+  const form = modal.querySelector('form');
+  form.addEventListener('submit', ev => {
+    ev.preventDefault();
+    if(onSubmit(new FormData(form)) !== false){ modal.close(); render(); }
+  });
+  modal.querySelector('[data-close]').onclick = () => modal.close();
+  modal.showModal();
+  const first = form.querySelector('input:not([type=checkbox]),select,textarea');
+  if(first) first.focus();
+}
+
+function trainingForm(t = {}){
+  openModal(t.id ? 'Edit training' : 'New training', `
+    <label><span>Training name *</span><input name="name" required value="${esc(t.name)}"></label>
+    <div class="grid2">
+      <label><span>Category / client</span><input name="category" value="${esc(t.category)}"></label>
+      <label><span>Trainer</span><input name="trainer" value="${esc(t.trainer)}"></label>
+      <label><span>Start date</span><input type="date" name="startDate" value="${esc(t.startDate)}"></label>
+      <label><span>End date</span><input type="date" name="endDate" value="${esc(t.endDate)}"></label>
+      <label><span>Pass mark (%) – optional</span><input type="number" name="passMark" min="0" max="100" value="${t.passMark ?? ''}"></label>
+    </div>
+    <label><span>Modules, one per line *</span><textarea name="modules" rows="6" required>${esc(t.modules ? t.modules.join('\n') : '')}</textarea></label>
+    <p class="muted" style="margin:-4px 0 0">Renaming or removing a module clears its completion marks.</p>`,
+  fd => {
+    const modules = fd.get('modules').split('\n').map(s => s.trim()).filter(Boolean);
+    if(!modules.length){ alert('Add at least one module.'); return false; }
+    const data = {
+      name: fd.get('name').trim(),
+      category: fd.get('category').trim(),
+      trainer: fd.get('trainer').trim(),
+      startDate: fd.get('startDate') || '',
+      endDate: fd.get('endDate') || '',
+      passMark: fd.get('passMark') === '' ? null : Number(fd.get('passMark')),
+      modules
+    };
+    if(data.startDate && data.endDate && data.endDate < data.startDate){ alert('End date is before start date.'); return false; }
+    if(t.id){
+      Object.assign(t, data);
+      db.enrollments.filter(e => e.trainingId === t.id)
+        .forEach(e => e.completedModules = e.completedModules.filter(m => modules.includes(m)));
+    } else {
+      db.trainings.push({id: uid(), ...data});
+    }
+    save();
+  });
+}
+
+function learnerForm(l = {}){
+  openModal(l.id ? 'Edit learner' : 'New learner', `
+    <label><span>Full name *</span><input name="name" required value="${esc(l.name)}"></label>
+    <div class="grid2">
+      <label><span>Email</span><input type="email" name="email" value="${esc(l.email)}"></label>
+      <label><span>Team / client</span><input name="team" value="${esc(l.team)}"></label>
+    </div>
+    <label><span>Location</span><input name="location" value="${esc(l.location)}"></label>`,
+  fd => {
+    const data = {
+      name: fd.get('name').trim(),
+      email: fd.get('email').trim(),
+      team: fd.get('team').trim(),
+      location: fd.get('location').trim()
+    };
+    if(l.id) Object.assign(l, data);
+    else db.learners.push({id: uid(), ...data});
+    save();
+  });
+}
+
+function enrollForm(t){
+  const enrolled = new Set(db.enrollments.filter(e => e.trainingId === t.id).map(e => e.learnerId));
+  const available = db.learners.filter(l => !enrolled.has(l.id)).sort((a,b) => a.name.localeCompare(b.name));
+  if(!db.learners.length){ alert('Add learners first (Learners → Add learner, or import a CSV under Data).'); return; }
+  openModal(`Enrol learners – ${t.name}`, available.length
+    ? `<p class="muted">Tick the learners to enrol. Learners already enrolled are not listed.</p>
+       <div class="checks">${available.map(l => `<label><input type="checkbox" name="learner" value="${l.id}"> ${esc(l.name)} <span class="muted">${esc(l.team)}</span></label>`).join('')}</div>`
+    : `<p class="muted">Every learner is already enrolled in this training.</p>`,
+  fd => {
+    const stamp = today();
+    fd.getAll('learner').forEach(learnerId => db.enrollments.push({
+      id: uid(), trainingId: t.id, learnerId, completedModules: [], score: null,
+      dropped: false, enrolledOn: stamp, lastActivity: stamp
+    }));
+    save();
+  });
+}
+
+/* ---------- import / export ---------- */
+function parseCSV(text){
+  const rows = []; let row = [], cur = '', quoted = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
+    if(quoted){
+      if(c === '"'){ if(text[i+1] === '"'){ cur += '"'; i++; } else quoted = false; }
+      else cur += c;
+    } else if(c === '"') quoted = true;
+    else if(c === ','){ row.push(cur); cur = ''; }
+    else if(c === '\n'){ row.push(cur); rows.push(row); row = []; cur = ''; }
+    else if(c !== '\r') cur += c;
+  }
+  if(cur || row.length){ row.push(cur); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim()));
+}
+
+function importLearners(text){
+  const rows = parseCSV(text.replace(/^﻿/, ''));
+  if(rows.length < 2){ alert('No data rows found in the CSV.'); return; }
+  const head = rows[0].map(h => h.trim().toLowerCase());
+  const col = k => head.indexOf(k);
+  if(col('name') < 0){ alert('The CSV needs a “name” column in the header row.'); return; }
+  let added = 0, skipped = 0;
+  for(const r of rows.slice(1)){
+    const get = k => col(k) >= 0 ? (r[col(k)] || '').trim() : '';
+    const name = get('name');
+    const email = get('email');
+    if(!name || (email && db.learners.some(l => l.email.toLowerCase() === email.toLowerCase()))){ skipped++; continue; }
+    db.learners.push({id: uid(), name, email, team: get('team'), location: get('location')});
+    added++;
+  }
+  save();
+  alert(`Imported ${added} learner(s). Skipped ${skipped} (missing name or duplicate email).`);
+}
+
+function importBackup(text){
+  let d;
+  try{ d = JSON.parse(text); }catch(e){ alert('That file is not valid JSON.'); return; }
+  if(!Array.isArray(d.trainings) || !Array.isArray(d.learners) || !Array.isArray(d.enrollments)){
+    alert('That file is not a Training Progress Tracker backup.'); return;
+  }
+  if(!confirm('Replace ALL current data with this backup?')) return;
+  db = normalize(d);
+  save();
+  alert('Backup restored.');
+}
+
+function download(name, content, type){
+  const url = URL.createObjectURL(new Blob([content], {type}));
+  const a = Object.assign(document.createElement('a'), {href: url, download: name});
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+}
+
+function csvCell(v){
+  let s = String(v ?? '');
+  if(/^[=+\-@]/.test(s)) s = "'" + s;           // avoid spreadsheet formula injection
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function exportCSV(){
+  const lines = [['Learner','Email','Team','Location','Training','Category','Trainer','Start','End','Status','Progress %','Modules completed','Assessment %','Last activity','Dropped']];
+  for(const e of db.enrollments){
+    const l = learnerById(e.learnerId), t = trainingById(e.trainingId);
+    if(!l || !t) continue;
+    lines.push([l.name, l.email, l.team, l.location, t.name, t.category, t.trainer, t.startDate, t.endDate,
+      enrollStatus(e), enrollProgress(e), e.completedModules.join('; '), e.score ?? '', e.lastActivity, e.dropped ? 'Yes' : 'No']);
+  }
+  const csv = lines.map(r => r.map(csvCell).join(',')).join('\r\n');
+  download(`learner-progress-${today()}.csv`, '﻿' + csv, 'text/csv;charset=utf-8');
+}
+
+function loadSample(){
+  if(db.trainings.length && !confirm('Add sample data alongside your existing data?')) return;
+  const t1 = {id:uid(), name:'Customer Empathy Essentials', category:'CX Skills', trainer:'Sample Trainer A', startDate:'2026-10-01', endDate:'2026-12-15', passMark:70,
+    modules:['Introduction','Active listening','De-escalation','Assessment']};
+  const t2 = {id:uid(), name:'Digital Tools Onboarding', category:'Digital', trainer:'Sample Trainer B', startDate:'2026-09-15', endDate:'2026-11-01', passMark:null,
+    modules:['Platform basics','Ticketing workflow','Knowledge base','Reporting']};
+  const t3 = {id:uid(), name:'AI Fundamentals for Agents', category:'AI Enablement', trainer:'Sample Trainer A', startDate:'2026-11-02', endDate:'2027-01-31', passMark:80,
+    modules:['What is GenAI','Prompting basics','Safe use and privacy','Quality checks','Final assessment']};
+  const learners = Array.from({length: 8}, (_, i) => ({
+    id: uid(), name: `Sample Learner ${String(i+1).padStart(2,'0')}`, email: `learner${i+1}@example.com`,
+    team: i % 2 ? 'Team Alpha' : 'Team Beta', location: i % 3 ? 'Site 1' : 'Site 2'
+  }));
+  const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return localISO(d); };
+  const enrollments = [];
+  [[t1, learners.slice(0,6), 0], [t2, learners.slice(2,8), 1], [t3, learners.slice(0,4), 2]].forEach(([t, ls, ti]) =>
+    ls.forEach((l, j) => {
+      const n = t.modules.length;
+      const count = (j * 3 + ti * 2) % (n + 1);
+      const complete = count === n;
+      enrollments.push({
+        id: uid(), trainingId: t.id, learnerId: l.id,
+        completedModules: t.modules.slice(0, count),
+        score: complete ? 60 + ((j * 11 + ti * 7) % 36) : null,
+        dropped: false, enrolledOn: daysAgo(60 - j * 5), lastActivity: daysAgo(j * 4 + ti)
+      });
+    }));
+  db.trainings.push(t1, t2, t3);
+  db.learners.push(...learners);
+  db.enrollments.push(...enrollments);
+  save();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', ev => {
+  const nav = ev.target.closest('[data-view]');
+  if(nav){ view = nav.dataset.view; render(); return; }
+
+  const b = ev.target.closest('[data-act]');
+  if(!b) return;
+  const act = b.dataset.act, id = b.dataset.id;
+
+  switch(act){
+    case 'new-training':   return trainingForm();
+    case 'edit-training':  return trainingForm(trainingById(id));
+    case 'del-training': {
+      const t = trainingById(id);
+      if(!confirm(`Delete “${t.name}” and all of its enrolments? This cannot be undone.`)) return;
+      db.trainings = db.trainings.filter(x => x.id !== id);
+      db.enrollments = db.enrollments.filter(e => e.trainingId !== id);
+      break;
+    }
+    case 'enroll':         return enrollForm(trainingById(id));
+    case 'new-learner':    return learnerForm();
+    case 'edit-learner':   return learnerForm(learnerById(id));
+    case 'del-learner': {
+      const l = learnerById(id);
+      if(!confirm(`Delete ${l.name} and their progress records?`)) return;
+      db.learners = db.learners.filter(x => x.id !== id);
+      db.enrollments = db.enrollments.filter(e => e.learnerId !== id);
+      break;
+    }
+    case 'toggle-mod': {
+      const e = db.enrollments.find(x => x.id === id);
+      const m = trainingById(e.trainingId).modules[Number(b.dataset.mod)];
+      const i = e.completedModules.indexOf(m);
+      if(i >= 0) e.completedModules.splice(i, 1); else e.completedModules.push(m);
+      e.lastActivity = today();
+      break;
+    }
+    case 'drop':      db.enrollments.find(x => x.id === id).dropped = true; break;
+    case 'reinstate': db.enrollments.find(x => x.id === id).dropped = false; break;
+    case 'unenroll': {
+      if(!confirm('Remove this enrolment and its progress?')) return;
+      db.enrollments = db.enrollments.filter(x => x.id !== id);
+      break;
+    }
+    case 'export-csv':  exportCSV(); return;
+    case 'export-json': download(`training-tracker-backup-${today()}.json`, JSON.stringify(db, null, 2), 'application/json'); return;
+    case 'load-sample': loadSample(); break;
+    case 'clear-all': {
+      if(!confirm('Delete ALL trainings, learners and progress? Export a backup first if you need it.')) return;
+      db = blank(); save(); break;
+    }
+    default: return;
+  }
+  save();
+  render();
+});
+
+document.addEventListener('input', ev => {
+  const t = ev.target;
+  if(t.id === 'pSearch'){ filters.pSearch = t.value; render(); }
+  if(t.id === 'lSearch'){ filters.lSearch = t.value; render(); }
+});
+
+document.addEventListener('change', async ev => {
+  const t = ev.target;
+  if(t.dataset.act === 'score'){
+    const e = db.enrollments.find(x => x.id === t.dataset.id);
+    const v = t.value.trim();
+    if(v === ''){ e.score = null; }
+    else {
+      const n = Number(v);
+      if(Number.isNaN(n) || n < 0 || n > 100){ alert('Assessment score must be between 0 and 100.'); t.value = e.score ?? ''; return; }
+      e.score = n;
+    }
+    e.lastActivity = today();
+    save(); render(); return;
+  }
+  if(t.id === 'pTraining'){ filters.pTraining = t.value; render(); return; }
+  if(t.id === 'pStatus'){ filters.pStatus = t.value; render(); return; }
+  if(t.id === 'csvFile' && t.files[0]){ importLearners(await t.files[0].text()); t.value = ''; render(); return; }
+  if(t.id === 'jsonFile' && t.files[0]){ importBackup(await t.files[0].text()); t.value = ''; render(); return; }
+});
+
+render();
+</script>
+</body>
+</html>
